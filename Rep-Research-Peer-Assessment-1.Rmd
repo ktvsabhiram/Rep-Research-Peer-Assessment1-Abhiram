@@ -1,0 +1,161 @@
+---
+Title: "Rep-Research-Peer-Assessment-1"
+Author: "Abhiram"
+date: "Sunday, July 19, 2015"
+Output: html_document
+---
+## Pre-Processing
+
+```{r}
+# clear work space
+rm(list=ls())
+# Make code visible 
+echo = TRUE  
+# No scientific notations for numbers
+options(scipen = 1) 
+```
+
+## Loading and preprocessing the data
+#### Step 1a: Loading data and convert date in activity data frame to date clss
+
+```{r}
+activity <- read.csv("./repdata-data-activity/activity.csv")
+activity$date <- as.Date(activity$date)
+```
+
+#### Step 1b: Convert data frame to tbl class
+```{r}
+library(dplyr)
+activity <- tbl_df(activity)
+```
+
+## What is mean total number of steps taken per day?
+#### For this part of the assignment, you can ignore the missing values in the dataset.
+
+#### Step 2a: Calculate Mean Total Number of Steps Taken Per Day
+
+```{r}
+activityStepsDay <- activity %>% 
+                    group_by(date) %>%
+                    summarise(stepsSum = sum(steps))
+```
+
+#### Step 2b: Histogram of total number of steps taken each day
+
+```{r}
+hist(activityStepsDay$stepsSum, breaks = 5, freq = TRUE, main = "Histogram of Total Steps Taken Each Day", xlab= "Total Steps Taken Each Day", ylab = "Frequency", col="blue", border="black")
+box(lty="solid")
+```
+
+#### Step2c: Report Mean of Total Steps Taken Each Day
+
+```{r}
+mean((activityStepsDay$stepsSum), na.rm=TRUE)
+```
+
+#### Step2d: Report Median of Total Steps Taken Each Day
+
+```{r}
+median((activityStepsDay$stepsSum), na.rm=TRUE)
+```
+
+## What is the average daily activity pattern?
+
+#### Step 3a: Time Series Plot of Interval Vs Avg Number of Steps Taken averaged across all days
+
+```{r}
+activityIntervalAvg <- tapply(activity$steps, activity$interval, mean, na.rm=TRUE)
+
+plot(row.names(activityIntervalAvg), activityIntervalAvg, type="l", main="Time-Series Plot of 5 min Interval Vs Avg Number of Steps Taken", xlab="Interval",ylab="Avg Steps Taken", col="blue")
+```
+
+#### Step 3b: The Time Interval at Which Maximum Number of Steps occurred when avg across all days
+
+```{r}
+names(which.max(activityIntervalAvg))
+```
+
+## Imputing missing values
+
+#### Step 4a: Calculate and report total number of missing values (NAs)
+
+```{r}
+sum(is.na(activity$steps))
+```
+
+#### Step4b: Strategy for filling missing values
+I have followed the strategy of imputing the NA values by the mean of steps for each interval taken across all days.
+
+```{r}
+#First calculate a data fram having the avg steps taken for each interval
+activity$intervalasfac<- as.factor(activity$interval)
+activityStepsInterval <- activity %>%
+                         group_by(intervalasfac) %>%
+                         summarise(Stepsavg = mean(steps,na.rm=TRUE))
+
+#Next merge the data frame with activity data frame by grouping based on interval
+activityImputed <- merge(activity,activityStepsInterval,by="intervalasfac")
+
+#Then add a variable that has steps from activity & has mean steps values for NAs
+activityImputed$stepsImputed <- ifelse(is.na(activityImputed$steps), activityImputed$Stepsavg, activityImputed$steps)
+```
+
+#### Step4c: create a new data set with missing data filled in
+
+```{r}
+activity2 <- activityImputed
+activity2$steps <- activityImputed$stepsImputed
+activity2$intervalasfac <- NULL
+activity2$stepsImputed <- NULL
+# check if any more NAs are present
+sum(is.na(activity2$steps))
+```
+
+#### Step4d: Histogram of total number of steps taken each day & mean, median calculation
+
+```{r}
+activity2StepsDay <-activity2 %>% 
+                    group_by(date) %>%
+                    summarise(stepsSum2 = sum(steps))
+
+hist(activity2StepsDay$stepsSum, breaks = 5, freq = TRUE, main = "Histogram of Total Steps Taken Each Day", xlab= "Total Steps Taken Each Day", ylab = "Frequency", col="blue", border="black")
+box(lty="solid")
+
+mean(activity2StepsDay$stepsSum2)
+median(activity2StepsDay$stepsSum2)
+
+```
+
+#### After imputing the missing NAs with the mean steps over each interval there is no effect on mean & median of total number of steps in each day. This approach doesnt effect the statistical results of the data set
+
+##Are there differences in activity patterns between weekdays and weekends?
+
+####Step 5a:Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+```{r}
+dayofweek <- weekdays(activity2$date)
+dayfactor <- vector()
+for (i in 1:nrow(activity2)) {
+    if (dayofweek[i] == "Saturday" | dayofweek[i]=="Sunday") {
+        dayfactor[i] <- "Weekend"
+    } else {
+        dayfactor[i] <- "Weekday"
+    }
+}
+
+activity2$dayfactor <- as.factor(dayfactor)
+```
+
+####Step 5b: Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken
+
+```{r}
+activity2IntervaldayfactorAvg <- activity2 %>%
+  group_by(dayfactor,interval) %>%
+  summarise(Steps2avg = mean(steps))
+
+library(ggplot2)
+library(lattice)
+xyplot(Steps2avg ~ interval | dayfactor, data = activity2IntervaldayfactorAvg, 
+       type = "l", layout = c(1,2), xlab = "Interval", ylab = "Number of Steps", 
+       main = "Time Series plot of average steps Vs Interval for Weekends and Weekdays")
+```
